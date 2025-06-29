@@ -1,0 +1,50 @@
+# === Python cache and virtual environments ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+*.log
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# === Jupyter notebook checkpoints ===
+.ipynb_checkpoints/
+
+# === VSCode and editor settings ===
+.vscode/
+*.code-workspace
+
+# === Data ===
+data/processed/
+*.csv
+*.tsv
+
+# === Plots and images ===
+plots/*.png
+reports/figures/*.png
+reports/figures/annotated_plots/*.png
+
+# === Streamlit cache ===
+.streamlit/
+
+# === OS files ===
+.DS_Store
+Thumbs.db
+
+# === Python build artifacts ===
+build/
+dist/
+*.spec
+
+# === Environment config ===
+*.env
+.env.*
+.envrc
