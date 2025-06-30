@@ -1,5 +1,5 @@
 import numpy as np
-from relativity_utils import lorentz_gamma
+from .relativity_utils import lorentz_gamma
 
 def compute_lorentz_dilation(velocities: np.ndarray, t_proper: float = 1.0) -> np.ndarray:
     """
