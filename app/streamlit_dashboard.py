@@ -175,52 +175,80 @@ else:
 # 📁 Export Results Section
 # ------------------------
 if dataframe_result is not None:
-    csv = dataframe_result.to_csv(index=False).encode("utf-8")
-    st.download_button("💾 Download CSV", csv, file_name="time_dilation_results.csv", mime="text/csv")
-
-    pdf_buffer = export_chart_to_pdf("Time Dilation Summary", dataframe_result)
-    st.download_button("📄 Export as PDF", pdf_buffer, file_name="time_dilation_summary.pdf")
-
-    if 'fig' in locals():
-        # Chart download format selection
-        chart_format = st.selectbox("📊 Select Chart Download Format", ["PNG", "PDF", "SVG", "HTML"])
+    st.markdown("### 📁 Export Options")
+    
+    # Create columns for organized layout
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Data Export Dropdown
+        data_export_option = st.selectbox(
+            "📊 Select Data Export Format",
+            ["Select Format...", "CSV", "PDF Summary"],
+            key="data_export"
+        )
         
-        if chart_format == "PNG":
-            img_buffer = BytesIO()
-            fig.write_image(img_buffer, format="png")
-            img_buffer.seek(0)
+        if data_export_option == "CSV":
+            csv = dataframe_result.to_csv(index=False).encode("utf-8")
             st.download_button(
-                "🖼️ Download Chart as PNG",
-                img_buffer,
-                file_name="time_dilation_chart.png",
-                mime="image/png"
+                "💾 Download CSV", 
+                csv, 
+                file_name="time_dilation_results.csv", 
+                mime="text/csv"
             )
-        elif chart_format == "PDF":
-            pdf_buffer = BytesIO()
-            fig.write_image(pdf_buffer, format="pdf")
-            pdf_buffer.seek(0)
+        elif data_export_option == "PDF Summary":
+            pdf_buffer = export_chart_to_pdf("Time Dilation Summary", dataframe_result)
             st.download_button(
-                "📄 Download Chart as PDF",
-                pdf_buffer,
-                file_name="time_dilation_chart.pdf",
-                mime="application/pdf"
+                "📄 Export Data as PDF", 
+                pdf_buffer, 
+                file_name="time_dilation_summary.pdf"
             )
-        elif chart_format == "SVG":
-            svg_buffer = BytesIO()
-            fig.write_image(svg_buffer, format="svg")
-            svg_buffer.seek(0)
-            st.download_button(
-                "🖼️ Download Chart as SVG",
-                svg_buffer,
-                file_name="time_dilation_chart.svg",
-                mime="image/svg+xml"
+    
+    with col2:
+        # Chart Export Dropdown (only show if chart exists)
+        if 'fig' in locals():
+            chart_export_option = st.selectbox(
+                "📈 Select Chart Export Format",
+                ["Select Format...", "PNG", "PDF", "SVG", "HTML"],
+                key="chart_export"
             )
-        elif chart_format == "HTML":
-            html_content = fig.to_html()
-            html_buffer = BytesIO(html_content.encode('utf-8'))
-            st.download_button(
-                "🌐 Download Chart as HTML",
-                html_buffer,
-                file_name="time_dilation_chart.html",
-                mime="text/html"
-            )
+            
+            if chart_export_option == "PNG":
+                img_buffer = BytesIO()
+                fig.write_image(img_buffer, format="png")
+                img_buffer.seek(0)
+                st.download_button(
+                    "🖼️ Download Chart as PNG",
+                    img_buffer,
+                    file_name="time_dilation_chart.png",
+                    mime="image/png"
+                )
+            elif chart_export_option == "PDF":
+                pdf_buffer = BytesIO()
+                fig.write_image(pdf_buffer, format="pdf")
+                pdf_buffer.seek(0)
+                st.download_button(
+                    "📄 Download Chart as PDF",
+                    pdf_buffer,
+                    file_name="time_dilation_chart.pdf",
+                    mime="application/pdf"
+                )
+            elif chart_export_option == "SVG":
+                svg_buffer = BytesIO()
+                fig.write_image(svg_buffer, format="svg")
+                svg_buffer.seek(0)
+                st.download_button(
+                    "🖼️ Download Chart as SVG",
+                    svg_buffer,
+                    file_name="time_dilation_chart.svg",
+                    mime="image/svg+xml"
+                )
+            elif chart_export_option == "HTML":
+                html_content = fig.to_html()
+                html_buffer = BytesIO(html_content.encode('utf-8'))
+                st.download_button(
+                    "🌐 Download Chart as HTML",
+                    html_buffer,
+                    file_name="time_dilation_chart.html",
+                    mime="text/html"
+                )
