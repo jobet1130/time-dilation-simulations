@@ -12,6 +12,6 @@ def compute_decay_distances(velocity_fractions: np.ndarray) -> np.ndarray:
     - array of decay distances in meters
     """
     velocities = velocity_fractions * c
-    gamma_values = np.array([lorentz_gamma(v) for v in velocities])
+    gamma_values = lorentz_gamma(velocities)  
     dilated_lifetimes = gamma_values * μ_proper_lifetime
     return velocities * dilated_lifetimes
