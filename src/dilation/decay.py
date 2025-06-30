@@ -1,5 +1,5 @@
 import numpy as np
-from relativity_utils import c, μ_proper_lifetime, lorentz_gamma
+from .relativity_utils import c, μ_proper_lifetime, lorentz_gamma
 
 def compute_decay_distances(velocity_fractions: np.ndarray) -> np.ndarray:
     """
