@@ -26,7 +26,7 @@ Rs = 2 * G * M / c**2         # Schwarzschild radius (m)
 # 🧪 Simulation Parameters
 # -----------------------------
 t_proper = 1.0                # Proper time in seconds (local clock)
-radii = np.linspace(1.01 * Rs, 10 * Rs, 500)   # Distances from BH center (avoid r = Rs)
+radii = np.linspace(1.01 * Rs, 10 * Rs, 50000)   # Distances from BH center (avoid r = Rs)
 r_over_Rs = radii / Rs        # Distance in multiples of Rs
 
 # -----------------------------

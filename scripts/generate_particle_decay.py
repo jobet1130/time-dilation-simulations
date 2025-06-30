@@ -19,7 +19,7 @@ t_proper = 2.2e-6             # Proper lifetime of a muon (s) in its rest frame
 # -----------------------------
 # ⚙️ Simulation Range
 # -----------------------------
-velocity_fractions = np.linspace(0.1, 0.999, 100)      # 0.1c to 0.999c
+velocity_fractions = np.linspace(0.1, 0.999, 50000)    # 0.1c to 0.999c (50,000 records)
 velocities = velocity_fractions * c
 
 # -----------------------------
