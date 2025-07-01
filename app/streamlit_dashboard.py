@@ -1,47 +1,40 @@
 import sys
 from pathlib import Path
 
-# Ensure `src` is discoverable
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+# Allow src module discovery
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-# Core Libraries
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import plotly.express as px
-import sympy as sp
 from io import BytesIO
-from reportlab.pdfgen import canvas
-from sympy.parsing.sympy_parser import parse_expr
-import base64
+from reportlab.pdfgen import canvas as pdf_canvas  # renamed to avoid clashing with speed of light 'c'
 
-# Local Modules
+# Local modules
 from src.dilation.lorentz import compute_lorentz_dilation
 from src.dilation.gravity import gravitational_time_dilation, schwarzschild_radius
 from src.dilation.decay import compute_decay_distances
 from src.dilation.relativity_utils import c, M_sun, μ_proper_lifetime, lorentz_gamma
 
 # ------------------------
-# Streamlit UI Config
+# Streamlit Setup
 # ------------------------
 st.set_page_config(page_title="⏳ Time Dilation Simulator", layout="wide")
 st.title("⏳ Time Dilation Simulator — Velocity, Gravity, and Decay")
 
+# ------------------------
+# Session State
+# ------------------------
+if "last_model" not in st.session_state:
+    st.session_state.last_model = None
+if "dataframe_result" not in st.session_state:
+    st.session_state.dataframe_result = None
+if "chart_figure" not in st.session_state:
+    st.session_state.chart_figure = None
 
 # ------------------------
-# ✏️ Editable Equation Preview
-# ------------------------
-st.sidebar.markdown("### ✏️ Custom Equation (Advanced)")
-user_expr_input = st.sidebar.text_input("Enter a custom expression (use `v`, `c`, `r`, `Rs`)", "1 / sqrt(1 - v**2 / c**2)")
-try:
-    user_expr = parse_expr(user_expr_input, evaluate=False)
-    st.sidebar.latex(sp.latex(user_expr))
-except Exception:
-    st.sidebar.error("❌ Invalid expression")
-
-# ------------------------
-# 🔽 Model Selection
+# Model Selection
 # ------------------------
 model = st.sidebar.selectbox("Select Time Dilation Model", [
     "Special Relativity (Velocity)",
@@ -49,26 +42,24 @@ model = st.sidebar.selectbox("Select Time Dilation Model", [
     "Relativistic Particle Decay"
 ])
 
-t_proper = 1.0  # Default Proper Time (seconds)
-dataframe_result = None
+# Reset session data if model changed
+if model != st.session_state.last_model:
+    st.session_state.dataframe_result = None
+    st.session_state.chart_figure = None
+    st.session_state.last_model = model
 
 # ------------------------
-# 📤 Upload CSV
+# File Upload
 # ------------------------
-uploaded_file = st.sidebar.file_uploader("Upload CSV with `velocity_fraction` or `radius_rs`", type=["csv"])
+uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
+t_proper = 1.0
 
 # ------------------------
-# 📥 Sample Templates
-# ------------------------
-st.sidebar.download_button("📄 Velocity Template", "velocity_fraction\n0.1\n0.5\n0.9", file_name="velocity_template.csv")
-st.sidebar.download_button("📄 Radius Template", "radius_rs\n1.1\n2.0\n5.0", file_name="radius_template.csv")
-
-# ------------------------
-# 🧾 PDF Export Function
+# Export to PDF Helper
 # ------------------------
 def export_chart_to_pdf(title, df):
     buffer = BytesIO()
-    c = canvas.Canvas(buffer)
+    c = pdf_canvas.Canvas(buffer)
     c.drawString(100, 800, title)
     text = c.beginText(50, 770)
     for line in df.to_string(index=False).split("\n"):
@@ -79,67 +70,86 @@ def export_chart_to_pdf(title, df):
     return buffer
 
 # ------------------------
-# 📊 Simulation Logic
+# Simulation Display
 # ------------------------
-st.markdown(f"## 📊 Simulation: {model}")
+st.subheader(f"📊 Simulation: {model}")
 
+fig = None
+df = None
+
+# =======================
+# ✅ CSV MODE
+# =======================
 if uploaded_file:
     user_df = pd.read_csv(uploaded_file)
 
-    if "velocity_fraction" in user_df.columns:
-        vf = user_df["velocity_fraction"].values
-        velocities = vf * c
-        dilated_time = compute_lorentz_dilation(velocities, t_proper)
+    if model == "Special Relativity (Velocity)" and "velocity_fraction" in user_df.columns:
+        vf = user_df["velocity_fraction"]
+        velocity = vf * c
+        dilated_time = compute_lorentz_dilation(np.array(velocity), t_proper)
         gamma = dilated_time / t_proper
 
-        dataframe_result = pd.DataFrame({
+        df = pd.DataFrame({
             "Velocity Fraction of c": vf,
-            "Velocity (m/s)": velocities,
+            "Velocity (m/s)": velocity,
             "Lorentz Factor (γ)": gamma,
             "Proper Time (s)": t_proper,
             "Dilated Time (s)": dilated_time,
             "Δ Time (s)": dilated_time - t_proper
         })
 
-        st.dataframe(dataframe_result.round(6))
+        fig = px.scatter(df, x="Velocity Fraction of c", y="Δ Time (s)", color="Δ Time (s)",
+                         title="Δ Time vs Velocity", color_continuous_scale="Viridis")
 
-        fig = px.scatter(dataframe_result,
-                         x="Velocity Fraction of c",
-                         y="Δ Time (s)",
-                         color="Δ Time (s)",
-                         title="Δ Time vs Velocity (Interactive)",
-                         labels={"Δ Time (s)": "Time Gained"},
-                         color_continuous_scale="Viridis")
-        st.plotly_chart(fig)
-
-    elif "radius_rs" in user_df.columns:
-        r = user_df["radius_rs"].values
+    elif model == "General Relativity (Gravity)" and "radius_rs" in user_df.columns:
+        r = user_df["radius_rs"]
         Rs = schwarzschild_radius(M_sun)
         dilation = gravitational_time_dilation(Rs, r * Rs)
         dilated_time = dilation * t_proper
 
-        dataframe_result = pd.DataFrame({
-            "Distance from BH (Rₛ)": r,
+        df = pd.DataFrame({
+            "Radius from Center (m)": r * Rs,
+            "Distance in Rs": r,
             "Proper Time (s)": t_proper,
-            "Dilation Factor": dilation,
             "Dilated Time (s)": dilated_time,
             "Δ Time (s)": dilated_time - t_proper
         })
 
-        st.dataframe(dataframe_result.round(6))
+        fig = px.scatter(df, x="Distance in Rs", y="Δ Time (s)", color="Δ Time (s)",
+                         title="Δ Time vs Distance", color_continuous_scale="Plasma")
 
-        fig = px.scatter(dataframe_result,
-                         x="Distance from BH (Rₛ)",
-                         y="Δ Time (s)",
-                         color="Δ Time (s)",
-                         title="Δ Time vs Distance (Interactive)",
-                         labels={"Δ Time (s)": "Time Gained"},
-                         color_continuous_scale="Plasma")
-        st.plotly_chart(fig)
+    elif model == "Relativistic Particle Decay" and "velocity_fraction" in user_df.columns:
+        vf = user_df["velocity_fraction"]
+        velocity = vf * c
+        gamma = lorentz_gamma(np.array(velocity))
+        dilated_lifetime = gamma * μ_proper_lifetime
+        distance = compute_decay_distances(vf)
+
+        df = pd.DataFrame({
+            "Velocity Fraction of c": vf,
+            "Velocity (m/s)": velocity,
+            "Lorentz Factor (γ)": gamma,
+            "Proper Decay Time (s)": μ_proper_lifetime,
+            "Dilated Decay Time (s)": dilated_lifetime,
+            "Distance Traveled (m)": distance
+        })
+
+        fig = px.scatter(df, x="Velocity Fraction of c", y="Distance Traveled (m)", color="Dilated Decay Time (s)",
+                         title="Decay Distance vs Velocity", color_continuous_scale="Cividis")
 
     else:
-        st.error("⚠️ CSV must contain `velocity_fraction` or `radius_rs`.")
+        st.error(f"⚠️ Uploaded CSV does not match the expected columns for **{model}**.")
+        st.info(
+            "**Expected Columns by Model:**\n\n"
+            "- **Special Relativity (Velocity):** `velocity_fraction`\n"
+            "- **General Relativity (Gravity):** `radius_rs`\n"
+            "- **Relativistic Particle Decay:** `velocity_fraction`\n"
+        )
+        st.stop()
 
+# =======================
+# ✅ Slider Mode
+# =======================
 else:
     if model == "Special Relativity (Velocity)":
         v_frac = st.slider("Velocity Fraction of c", 0.1, 0.99, 0.5, 0.01)
@@ -147,8 +157,17 @@ else:
         dilated_time = compute_lorentz_dilation(np.array([velocity]), t_proper)[0]
         gamma = dilated_time / t_proper
 
-        st.markdown(f"**γ (Lorentz Factor):** `{gamma:.4f}`")
-        st.markdown(f"**Dilated Time:** `{dilated_time:.6f} s`")
+        df = pd.DataFrame({
+            "Velocity Fraction of c": [v_frac],
+            "Velocity (m/s)": [velocity],
+            "Lorentz Factor (γ)": [gamma],
+            "Proper Time (s)": [t_proper],
+            "Dilated Time (s)": [dilated_time],
+            "Δ Time (s)": [dilated_time - t_proper]
+        })
+
+        fig = px.bar(df, x="Velocity Fraction of c", y="Δ Time (s)",
+                     color="Δ Time (s)", color_continuous_scale="Viridis")
 
     elif model == "General Relativity (Gravity)":
         r = st.slider("Distance from BH (in Rₛ)", 1.1, 10.0, 2.0, 0.1)
@@ -156,99 +175,135 @@ else:
         dilation = gravitational_time_dilation(Rs, r * Rs)
         dilated_time = dilation * t_proper
 
-        st.markdown(f"**Dilation Factor:** `{dilation:.4f}`")
-        st.markdown(f"**Dilated Time:** `{dilated_time:.6f} s`")
+        df = pd.DataFrame({
+            "Radius from Center (m)": [r * Rs],
+            "Distance in Rs": [r],
+            "Proper Time (s)": [t_proper],
+            "Dilated Time (s)": [dilated_time],
+            "Δ Time (s)": [dilated_time - t_proper]
+        })
+
+        fig = px.bar(df, x="Distance in Rs", y="Δ Time (s)",
+                     color="Δ Time (s)", color_continuous_scale="Plasma")
 
     elif model == "Relativistic Particle Decay":
         v = st.slider("Muon Speed (fraction of c)", 0.5, 0.999, 0.98, 0.001)
-        vf_array = np.array([v])
-        distance_m = compute_decay_distances(vf_array)[0]
-
-        gamma = lorentz_gamma(v * c)
+        velocity = v * c
+        gamma = lorentz_gamma(np.array([velocity]))
         dilated_lifetime = gamma * μ_proper_lifetime
+        distance = compute_decay_distances(np.array([v]))[0]
 
-        st.markdown(f"**γ (Lorentz Factor):** `{gamma:.4f}`")
-        st.markdown(f"**Dilated Lifetime:** `{dilated_lifetime:.6e} s`")
-        st.markdown(f"**Decay Distance:** `{distance_m / 1000:.2f} km`")
+        df = pd.DataFrame({
+            "Velocity Fraction of c": [v],
+            "Velocity (m/s)": [velocity],
+            "Lorentz Factor (γ)": [gamma],
+            "Proper Decay Time (s)": [μ_proper_lifetime],
+            "Dilated Decay Time (s)": [dilated_lifetime],
+            "Distance Traveled (m)": [distance]
+        })
 
-# ------------------------
-# 📁 Export Results Section
-# ------------------------
-if dataframe_result is not None:
+        fig = px.bar(df, x="Velocity Fraction of c", y="Distance Traveled (m)",
+                     color="Dilated Decay Time (s)", color_continuous_scale="Cividis")
+
+# =======================
+# ✅ Output Display
+# =======================
+if df is not None:
+    st.dataframe(df.round(6))
+if fig is not None:
+    st.plotly_chart(fig)
+
+st.session_state.dataframe_result = df
+st.session_state.chart_figure = fig
+
+# =======================
+# ✅ Custom Manual Input Section
+# =======================
+with st.expander("🔧 Custom Manual Input Calculation"):
+    st.write("Manually simulate using custom values.")
+
+    if model == "Special Relativity (Velocity)":
+        custom_vf = st.number_input("Custom Velocity Fraction of c", min_value=0.0, max_value=0.999999, value=0.8)
+        velocity = custom_vf * c
+        dilated_time = compute_lorentz_dilation(np.array([velocity]), t_proper)[0]
+        gamma = dilated_time / t_proper
+        delta_time = dilated_time - t_proper
+
+        custom_df = pd.DataFrame({
+            "Velocity Fraction of c": [custom_vf],
+            "Velocity (m/s)": [velocity],
+            "Lorentz Factor (γ)": [gamma],
+            "Proper Time (s)": [t_proper],
+            "Dilated Time (s)": [dilated_time],
+            "Δ Time (s)": [delta_time]
+        })
+
+        st.markdown("#### 📋 Custom Input Results")
+        st.dataframe(custom_df.round(6))
+
+    elif model == "General Relativity (Gravity)":
+        custom_rs = st.number_input("Custom Distance from Center (in Rₛ)", min_value=1.01, value=2.5)
+        Rs = schwarzschild_radius(M_sun)
+        radius_m = custom_rs * Rs
+        dilation = gravitational_time_dilation(Rs, radius_m)
+        dilated_time = dilation * t_proper
+        delta_time = dilated_time - t_proper
+
+        custom_df = pd.DataFrame({
+            "Radius from Center (m)": [radius_m],
+            "Distance in Rs": [custom_rs],
+            "Proper Time (s)": [t_proper],
+            "Dilated Time (s)": [dilated_time],
+            "Δ Time (s)": [delta_time]
+        })
+
+        st.markdown("#### 📋 Custom Input Results")
+        st.dataframe(custom_df.round(6))
+
+    elif model == "Relativistic Particle Decay":
+        custom_vf = st.number_input("Custom Muon Velocity Fraction of c", min_value=0.5, max_value=0.999, value=0.95)
+        velocity = custom_vf * c
+        gamma = lorentz_gamma(np.array([velocity]))
+        dilated_lifetime = gamma * μ_proper_lifetime
+        distance = compute_decay_distances(np.array([custom_vf]))[0]
+
+        custom_df = pd.DataFrame({
+            "Velocity Fraction of c": [custom_vf],
+            "Velocity (m/s)": [velocity],
+            "Lorentz Factor (γ)": [gamma],
+            "Proper Decay Time (s)": [μ_proper_lifetime],
+            "Dilated Decay Time (s)": [dilated_lifetime],
+            "Distance Traveled (m)": [distance]
+        })
+
+        st.markdown("#### 📋 Custom Input Results")
+        st.dataframe(custom_df.round(6))
+
+
+# =======================
+# ✅ Export Options
+# =======================
+if df is not None:
     st.markdown("### 📁 Export Options")
-    
-    # Create columns for organized layout
     col1, col2 = st.columns(2)
-    
+
     with col1:
-        # Data Export Dropdown
-        data_export_option = st.selectbox(
-            "📊 Select Data Export Format",
-            ["Select Format...", "CSV", "PDF Summary"],
-            key="data_export"
-        )
-        
-        if data_export_option == "CSV":
-            csv = dataframe_result.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "💾 Download CSV", 
-                csv, 
-                file_name="time_dilation_results.csv", 
-                mime="text/csv"
-            )
-        elif data_export_option == "PDF Summary":
-            pdf_buffer = export_chart_to_pdf("Time Dilation Summary", dataframe_result)
-            st.download_button(
-                "📄 Export Data as PDF", 
-                pdf_buffer, 
-                file_name="time_dilation_summary.pdf"
-            )
-    
+        export_format = st.selectbox("Export Data Format", ["Select...", "CSV", "PDF"])
+        if export_format == "CSV":
+            csv = df.to_csv(index=False).encode("utf-8")
+            st.download_button("📥 Download CSV", csv, file_name="time_dilation_results.csv", mime="text/csv")
+        elif export_format == "PDF":
+            pdf = export_chart_to_pdf("Time Dilation Summary", df)
+            st.download_button("📄 Download PDF", pdf, file_name="time_dilation_summary.pdf")
+
     with col2:
-        # Chart Export Dropdown (only show if chart exists)
-        if 'fig' in locals():
-            chart_export_option = st.selectbox(
-                "📈 Select Chart Export Format",
-                ["Select Format...", "PNG", "PDF", "SVG", "HTML"],
-                key="chart_export"
-            )
-            
-            if chart_export_option == "PNG":
-                img_buffer = BytesIO()
-                fig.write_image(img_buffer, format="png")
-                img_buffer.seek(0)
-                st.download_button(
-                    "🖼️ Download Chart as PNG",
-                    img_buffer,
-                    file_name="time_dilation_chart.png",
-                    mime="image/png"
-                )
-            elif chart_export_option == "PDF":
-                pdf_buffer = BytesIO()
-                fig.write_image(pdf_buffer, format="pdf")
-                pdf_buffer.seek(0)
-                st.download_button(
-                    "📄 Download Chart as PDF",
-                    pdf_buffer,
-                    file_name="time_dilation_chart.pdf",
-                    mime="application/pdf"
-                )
-            elif chart_export_option == "SVG":
-                svg_buffer = BytesIO()
-                fig.write_image(svg_buffer, format="svg")
-                svg_buffer.seek(0)
-                st.download_button(
-                    "🖼️ Download Chart as SVG",
-                    svg_buffer,
-                    file_name="time_dilation_chart.svg",
-                    mime="image/svg+xml"
-                )
-            elif chart_export_option == "HTML":
-                html_content = fig.to_html()
-                html_buffer = BytesIO(html_content.encode('utf-8'))
-                st.download_button(
-                    "🌐 Download Chart as HTML",
-                    html_buffer,
-                    file_name="time_dilation_chart.html",
-                    mime="text/html"
-                )
+        chart_format = st.selectbox("Export Chart Format", ["Select...", "PNG", "SVG", "HTML"])
+        if fig and chart_format != "Select...":
+            if chart_format == "HTML":
+                html = BytesIO(fig.to_html().encode("utf-8"))
+                st.download_button("🌐 Download HTML", html, file_name="chart.html", mime="text/html")
+            else:
+                img = BytesIO()
+                fig.write_image(img, format=chart_format.lower())
+                img.seek(0)
+                st.download_button(f"🖼 Download {chart_format}", img, file_name=f"chart.{chart_format.lower()}")
